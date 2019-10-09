@@ -37,6 +37,7 @@ typemap = {  # primitive type, converted type, bit width
     'bool': (parquet_thrift.Type.BOOLEAN, None, 1),
     'int32': (parquet_thrift.Type.INT32, None, 32),
     'int64': (parquet_thrift.Type.INT64, None, 64),
+    'Int64': (parquet_thrift.Type.INT64, None, 64),
     'int8': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.INT_8, 8),
     'int16': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.INT_16, 16),
     'uint8': (parquet_thrift.Type.INT32, parquet_thrift.ConvertedType.UINT_8, 8),
@@ -395,6 +396,8 @@ def make_definitions(data, no_nulls):
         encode_unsigned_varint(l << 1, temp)
         temp.write_byte(1)
         block = struct.pack('<i', temp.loc) + temp.so_far().tostring()
+        if data.dtype == 'Int64':
+            data = data.astype(np.int64)
         out = data
     else:
         se = parquet_thrift.SchemaElement(type=parquet_thrift.Type.BOOLEAN)
@@ -438,7 +441,7 @@ def write_column(f, data, selement, compression=None):
         if is_categorical_dtype(data.dtype):
             num_nulls = (data.cat.codes == -1).sum()
         elif data.dtype.kind in ['i', 'b']:
-            num_nulls = 0
+            num_nulls = data.isna().sum()
         else:
             num_nulls = len(data) - data.count()
         definition_data, data = make_definitions(data, num_nulls == 0)
