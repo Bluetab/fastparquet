@@ -3,7 +3,11 @@ from __future__ import unicode_literals
 
 import io
 import os
+import subprocess
+import sys
+from distutils.version import LooseVersion
 
+import numba
 import numpy as np
 import pandas as pd
 try:
@@ -18,6 +22,12 @@ from fastparquet.api import statistics, sorted_partitioned_columns, filter_in, f
 from fastparquet.util import join_path
 
 TEST_DATA = "test-data"
+
+
+@pytest.mark.skipif(numba.__version__ <= LooseVersion("0.39.0"), reason="Warning from numba.")
+def test_import_without_warning():
+    # in a subprocess to avoid import chacing issues.
+    subprocess.check_call([sys.executable, "-Werror", "-c", "import fastparquet"])
 
 
 def test_statistics(tempdir):
@@ -602,7 +612,7 @@ def test_bad_file_paths(tempdir):
 
 
 def test_compression_zstandard(tempdir):
-    pytest.importorskip('zstd')
+    pytest.importorskip('zstandard')
 
     df = pd.DataFrame(
         {
@@ -644,6 +654,47 @@ def test_compression_zstandard(tempdir):
     df2 = p.to_pandas()
 
     pd.util.testing.assert_frame_equal(df, df2)
+
+
+def test_compression_zstd(tempdir):
+    pytest.importorskip('zstd')
+
+    df = pd.DataFrame(
+        {
+            'x': np.arange(1000),
+            'y': np.arange(1, 1001),
+            'z': np.arange(2, 1002),
+        }
+    )
+
+    fn = os.path.join(tempdir, 'foocomp.parquet')
+
+    c = {
+        "x": {
+            "type": "gzip",
+            "args": {
+                "compresslevel": 5,
+            }
+        },
+        "y": {
+            "type": "zstd",
+            "args": {
+                "level": 5,
+            }
+        },
+        "_default": {
+            "type": "gzip",
+            "args": None
+        }
+    }
+    write(fn, df, compression=c)
+
+    p = ParquetFile(fn)
+
+    df2 = p.to_pandas()
+
+    pd.util.testing.assert_frame_equal(df, df2)
+
 
 def test_compression_lz4(tempdir):
     pytest.importorskip('lz4')
